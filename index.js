@@ -3,7 +3,7 @@ const fs = require("fs");
 
 const app = express();
 app.use(express.urlencoded({ extended: true }));
-
+app.use(express.json());
 let db = {};
 try { db = JSON.parse(fs.readFileSync("db.json")); } catch {}
 
