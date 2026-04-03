@@ -12,8 +12,19 @@ app.get("/", (req, res) => {
 });
 
 // WEBHOOK TEST
+// TEST
 app.get("/webhook", (req, res) => {
   res.send("Webhook ready ✅");
+});
+
+// WEBHOOK UTAMA (INI SAJA)
+app.post("/webhook", (req, res) => {
+  let msg = (req.body.Body || "").toLowerCase();
+
+  let reply = "Halo";
+
+  res.set("Content-Type", "text/xml");
+  res.send(`<Response><Message>${reply}</Message></Response>`);
 });
 
 // DATABASE
