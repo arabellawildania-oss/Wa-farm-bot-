@@ -2,16 +2,27 @@ const express = require("express");
 const fs = require("fs");
 
 const app = express();
+
 app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
+
+// ROOT CHECK
 app.get("/", (req, res) => {
   res.send("Server hidup 🚀");
 });
+
+// WEBHOOK CHECK
 app.get("/webhook", (req, res) => {
   res.send("Webhook ready ✅");
 });
-app.use(express.json());
+
+// DATABASE
 let db = {};
-try { db = JSON.parse(fs.readFileSync("db.json")); } catch {}
+try {
+  db = JSON.parse(fs.readFileSync("db.json"));
+} catch {
+  db = {};
+}
 
 function save() {
   fs.writeFileSync("db.json", JSON.stringify(db, null, 2));
@@ -30,20 +41,22 @@ function user(id) {
   return db[id];
 }
 
+// WEBHOOK POST
 app.post("/webhook", (req, res) => {
   let msg = (req.body.Body || "").toLowerCase();
   let id = req.body.From;
+
   let u = user(id);
   let r = "";
-  
+
   if (msg === "main") {
-    r = `🌍 FARM GAME ULTIMATE\n💰 ${u.uang}\n\nPerintah:\n🌱 tanam\n🐄 ternak\n🎒 tas\n🎁 daily\n🎰 gacha\n🏪 jual`;
+    r = `🌾 FARM GAME\n💰 ${u.uang}\n\nPerintah:\ntanam\nternak\ntas\njual\ndaily\ngacha`;
   }
 
   else if (msg === "tanam") {
-    let hasil = Math.floor(Math.random()*10)+5;
-    u.inv.padi = (u.inv.padi||0)+hasil;
-    r = `🌾 Panen +${hasil}`;
+    let hasil = Math.floor(Math.random() * 10) + 5;
+    u.inv.padi = (u.inv.padi || 0) + hasil;
+    r = `🌱 Panen ${hasil}`;
   }
 
   else if (msg === "ternak") {
@@ -56,16 +69,16 @@ app.post("/webhook", (req, res) => {
   }
 
   else if (msg === "jual") {
-    let uang = (u.inv.padi||0)*100;
+    let uang = (u.inv.padi || 0) * 100;
     u.uang += uang;
     u.inv.padi = 0;
-    r = `💰 +${uang}`;
+    r = `💰 ${uang}`;
   }
 
   else if (msg === "daily") {
-    if (Date.now() - u.lastDaily < 86400000)
-      return send(res,"⏳ Sudah claim");
-
+    if (Date.now() - u.lastDaily < 86400000) {
+      return send(res, "⏳ Sudah claim");
+    }
     u.uang += 500;
     u.lastDaily = Date.now();
     r = "🎁 +500";
@@ -77,7 +90,7 @@ app.post("/webhook", (req, res) => {
       r = "🌟 Dapat VIP!";
     } else {
       u.uang -= 100;
-      r = "💀 Zonkk -100";
+      r = "💀 Zonk -100";
     }
   }
 
@@ -89,6 +102,7 @@ app.post("/webhook", (req, res) => {
   send(res, r);
 });
 
+// RESPONSE TWILIO
 function send(res, msg) {
   res.set("Content-Type", "text/xml");
   res.send(`<Response><Message>${msg}</Message></Response>`);
@@ -96,4 +110,3 @@ function send(res, msg) {
 
 app.listen(process.env.PORT || 3000, () => {
   console.log("Server jalan 🚀");
-});
