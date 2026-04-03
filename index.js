@@ -5,11 +5,11 @@ const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// ================= ROOT =================
+// ===== ROOT =====
 app.get("/", (req, res) => res.send("🌾 RPG FARM ONLINE"));
 app.get("/health", (req, res) => res.send("OK"));
 
-// ================= DATABASE =================
+// ===== DATABASE =====
 const DB_FILE = "./db.json";
 let db = {};
 
@@ -30,7 +30,7 @@ function saveDB() {
 }
 loadDB();
 
-// ================= SYSTEM =================
+// ===== UTIL =====
 function narasi(type, text) {
   const garis = "━━━━━━━━━━━━━━━";
   const icon = {
@@ -45,7 +45,7 @@ ${text}
 ${garis}`;
 }
 
-function hariSekarang() {
+function hari() {
   return Math.floor(Date.now() / 86400000);
 }
 
@@ -54,7 +54,7 @@ function cuaca() {
   return list[new Date().getHours() % list.length];
 }
 
-// ================= DATA =================
+// ===== DATA =====
 const tanaman = {
   jagung: { harga: 100, hari: 2, hasil: 300 },
   padi: { harga: 150, hari: 3, hasil: 500 },
@@ -73,7 +73,7 @@ const beratItem = {
   apel: 1.5
 };
 
-// ================= USER =================
+// ===== USER =====
 function getUser(id) {
   if (!db[id]) {
     db[id] = {
@@ -89,7 +89,7 @@ function getUser(id) {
   return db[id];
 }
 
-// ================= BERAT =================
+// ===== BERAT =====
 function totalBerat(inv) {
   let total = 0;
   for (let i in inv) {
@@ -102,58 +102,64 @@ function bisaBawa(u, item, jumlah) {
   return totalBerat(u.inv) + jumlah * (beratItem[item] || 1) <= u.kapasitas;
 }
 
-// ================= RESPONSE =================
+// ===== RESPONSE =====
 function send(res, msg) {
   res.type("text/xml");
   res.send(`<Response><Message>${msg}</Message></Response>`);
 }
 
-// ================= WEBHOOK =================
+// ===== WEBHOOK =====
 app.post("/webhook", (req, res) => {
   try {
-    let msg = (req.body.Body || "").toLowerCase();
+    let msg = (req.body.Body || "").toLowerCase().trim();
+    let raw = (req.body.Body || "").trim();
     let id = req.body.From;
     let u = getUser(id);
-    let r = "";
 
-    // ===== SETUP PLAYER =====
-if (!u.gender) {
-  if (msg === "cowok" || msg === "cewek") {
-    u.gender = msg;
-    saveDB();
-    return send(res, narasi("sukses", `Gender dipilih: ${msg}`));
-  }
+    // ===== GENDER =====
+    if (!u.gender) {
+      if (msg === "cowok" || msg === "cewek") {
+        u.gender = msg;
+        saveDB();
+        return send(res, narasi("sukses",
+`🧬 Gender dipilih: ${msg}
 
-  return send(res, narasi("info",
-`🎮 SELAMAT DATANG
+✨ Dunia mulai terbuka...
 
-Pilih gender:
-👉 ketik: cowok / cewek`));
-}
+👉 Siapa namamu?`));
+      }
 
-if (!u.nama) {
-  if (msg.startsWith("nama")) {
-    let nama = msg.replace("nama", "").trim();
+      return send(res, narasi("info",
+`🌾 Kamu terbangun di desa kecil...
 
-    if (!nama) {
-      return send(res, "❌ masukkan nama!");
+👤 Pilih gender:
+👉 cowok / cewek`));
     }
 
-    u.nama = nama;
-    saveDB();
+    // ===== NAMA AUTO =====
+    if (!u.nama) {
+      if (raw.length >= 3) {
+        u.nama = raw;
+        saveDB();
 
-    return send(res, narasi("sukses",
-`👤 Nama disimpan: ${nama}
+        return send(res, narasi("sukses",
+`👤 Halo ${u.nama}...
 
-🔥 Siap bermain! ketik: main`));
-  }
+🌾 Kamu memulai hidup baru...
+🌤 ${cuaca()}
 
-  return send(res, narasi("info",
-`✏️ Buat nama kamu
+💭 "Aku harus bertahan hidup disini..."
 
-👉 ketik:
-nama Jibriel`));
-}
+👉 ketik *main* untuk mulai`));
+      }
+
+      return send(res, narasi("info",
+`✏️ Siapa nama kamu?
+
+💬 ketik saja namamu`));
+    }
+
+    let r = "";
 
     // ===== MENU =====
     if (msg === "main") {
@@ -169,16 +175,22 @@ panen
 mancing
 jual
 inv
+ternak
 misi`);
     }
 
     // ===== SHOP =====
     else if (msg === "shop") {
       let list = Object.keys(tanaman)
-        .map(i => `${i} - ${tanaman[i].harga}`)
+        .map(i => `🌱 ${i} - ${tanaman[i].harga}`)
         .join("\n");
 
-      r = narasi("info", `🏪 TOKO\n\n${list}`);
+      r = narasi("info",
+`🏪 Kamu masuk ke toko desa...
+
+${list}
+
+💬 ketik: beli <item> jumlah`);
     }
 
     // ===== BELI =====
@@ -190,78 +202,142 @@ misi`);
       if (!tanaman[item]) return send(res, "❌ tidak ada");
 
       if (!bisaBawa(u, item, jumlah)) {
-        return send(res, narasi("error", "Tas penuh!"));
+        return send(res, narasi("error", "🎒 Tas terlalu berat!"));
       }
 
       let harga = tanaman[item].harga * jumlah;
-      if (u.uang < harga) return send(res, "💸 kurang");
+      if (u.uang < harga) return send(res, "💸 uang kurang");
 
       u.uang -= harga;
       u.inv[item] = (u.inv[item] || 0) + jumlah;
 
-      r = narasi("sukses", `beli ${item} x${jumlah}`);
+      r = narasi("sukses",
+`🛒 Kamu membeli ${item} x${jumlah}
+
+💰 -${harga}
+⚖️ ${totalBerat(u.inv).toFixed(1)} kg`);
     }
 
     // ===== TANAM =====
     else if (msg.startsWith("tanam")) {
       let item = msg.split(" ")[1];
 
-      if (!u.inv[item]) return send(res, "❌ tidak punya");
+      if (!u.inv[item]) return send(res, narasi("error", "❌ tidak punya bibit"));
 
       u.inv[item]--;
-      u.tanam = { jenis: item, hariMulai: hariSekarang() };
+      u.tanam = { jenis: item, mulai: hari() };
 
-      r = narasi("proses", `menanam ${item}...\nsiap ${tanaman[item].hari} hari`);
+      let data = tanaman[item];
+
+      r = narasi("proses",
+`🌱 ${u.nama} menanam ${item}...
+
+🌿 Tanah digemburkan...
+💧 Disiram perlahan...
+🌤 ${cuaca()}
+
+⏳ Siap dalam ${data.hari} hari`);
     }
 
     // ===== PANEN =====
     else if (msg === "panen") {
-      if (!u.tanam) return send(res, "❌ belum tanam");
+      if (!u.tanam) return send(res, narasi("error", "❌ belum tanam"));
 
       let data = tanaman[u.tanam.jenis];
-      let selisih = hariSekarang() - u.tanam.hariMulai;
+      let selisih = hari() - u.tanam.mulai;
 
       if (selisih < data.hari) {
-        return send(res, narasi("proses", `belum siap ${selisih}/${data.hari}`));
+        return send(res, narasi("proses",
+`⏳ Belum siap...
+📅 ${selisih}/${data.hari} hari`));
       }
 
-      let hasil = data.hasil;
-      u.uang += hasil;
+      u.uang += data.hasil;
       u.tanam = null;
 
-      r = narasi("hasil", `panen +${hasil}`);
+      r = narasi("hasil",
+`🌾 Panen berhasil!
+
+💰 +${data.hasil}
+🌤 ${cuaca()}
+
+✨ kerja keras terbayar!`);
     }
 
     // ===== JUAL =====
     else if (msg === "jual") {
       let total = 0;
-
-      for (let i in u.inv) {
-        total += u.inv[i] * 100;
-      }
+      for (let i in u.inv) total += u.inv[i] * 100;
 
       u.inv = {};
       u.uang += total;
 
-      r = narasi("hasil", `jual semua +${total}`);
+      r = narasi("hasil",
+`🏪 Kamu menjual semua hasil...
+
+💰 +${total}
+
+🙂 Pedagang tersenyum puas`);
     }
 
     // ===== MANCING =====
     else if (msg === "mancing") {
       let rand = Math.random();
-      r = narasi("proses", rand < 0.5 ? "dapat ikan" : "zonk");
+
+      r = narasi("proses",
+`🎣 ${u.nama} melempar kail...
+
+🌊 Air bergetar...
+⏳ menunggu...
+
+${rand < 0.5 ? "🐟 dapat ikan!" : "💀 zonk..."}`);
+    }
+
+    // ===== TERNAK =====
+    else if (msg === "ternak") {
+      r = narasi("info",
+`🐄 Peternakan
+
+Sapi: ${u.ternak.sapi}
+
+👉 beli sapi`);
+    }
+
+    else if (msg === "beli sapi") {
+      if (u.uang < 500) return send(res, "💸 kurang");
+
+      u.uang -= 500;
+      u.ternak.sapi++;
+
+      r = narasi("sukses",
+`🐄 Kamu membeli sapi...
+
+😊 Dia terlihat senang`);
     }
 
     // ===== INVENTORY =====
     else if (msg === "inv") {
+      let isi = Object.keys(u.inv).length
+        ? Object.entries(u.inv)
+            .map(([k,v]) => `🌱 ${k}: ${v}`)
+            .join("\n")
+        : "Kosong";
+
       r = narasi("info",
-JSON.stringify(u.inv, null, 2) +
-`\n⚖️ ${totalBerat(u.inv)}/${u.kapasitas} kg`);
+`${isi}
+
+⚖️ ${totalBerat(u.inv).toFixed(1)}/${u.kapasitas} kg`);
     }
 
     // ===== MISI =====
     else if (msg === "misi") {
-      r = narasi("info", "panen 2x hari ini");
+      r = narasi("info",
+`📜 Misi hari ini:
+
+🌾 panen 1x
+🎣 mancing 1x
+
+🎁 hadiah menanti`);
     }
 
     else {
@@ -277,7 +353,7 @@ JSON.stringify(u.inv, null, 2) +
   }
 });
 
-// ================= RUN =================
+// ===== RUN =====
 app.listen(process.env.PORT || 3000, "0.0.0.0", () => {
   console.log("🚀 jalan");
 });
