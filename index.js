@@ -6,7 +6,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
 // ================= ROOT =================
-app.get("/", (req, res) => res.send("🌾 RPG FARM ONLINE 🚀"));
+app.get("/", (req, res) => res.send("🌾 RPG FARM ONLINE"));
 app.get("/health", (req, res) => res.send("OK"));
 
 // ================= DATABASE =================
@@ -16,7 +16,7 @@ let db = {};
 function loadDB() {
   try {
     if (fs.existsSync(DB_FILE)) {
-      db = JSON.parse(fs.readFileSync(DB_FILE)) || {};
+      db = JSON.parse(fs.readFileSync(DB_FILE));
     } else {
       fs.writeFileSync(DB_FILE, "{}");
       db = {};
@@ -25,58 +25,84 @@ function loadDB() {
     db = {};
   }
 }
-
 function saveDB() {
   fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
 }
-
 loadDB();
+
+// ================= SYSTEM =================
+function narasi(type, text) {
+  const garis = "━━━━━━━━━━━━━━━";
+  const icon = {
+    info: "📜",
+    sukses: "✅",
+    error: "❌",
+    proses: "⏳",
+    hasil: "🎉"
+  };
+  return `${icon[type] || "🎮"} ${garis}
+${text}
+${garis}`;
+}
+
+function hariSekarang() {
+  return Math.floor(Date.now() / 86400000);
+}
+
+function cuaca() {
+  const list = ["☀️ Cerah", "🌧 Hujan", "🌥 Mendung", "🌪 Angin"];
+  return list[new Date().getHours() % list.length];
+}
+
+// ================= DATA =================
+const tanaman = {
+  jagung: { harga: 100, hari: 2, hasil: 300 },
+  padi: { harga: 150, hari: 3, hasil: 500 },
+  wortel: { harga: 200, hari: 2, hasil: 600 },
+  tomat: { harga: 300, hari: 4, hasil: 900 },
+  strawberry: { harga: 500, hari: 5, hasil: 1500 },
+  apel: { harga: 800, hari: 6, hasil: 2500 }
+};
+
+const beratItem = {
+  padi: 1,
+  jagung: 1.2,
+  wortel: 0.8,
+  tomat: 0.7,
+  strawberry: 0.3,
+  apel: 1.5
+};
 
 // ================= USER =================
 function getUser(id) {
   if (!db[id]) {
     db[id] = {
       uang: 1000,
-      exp: 0,
-      level: 1,
       inv: {},
-      tanam: null
+      tanam: null,
+      kapasitas: 100,
+      gender: null,
+      nama: null,
+      ternak: { sapi: 0, kenyang: 0 }
     };
   }
   return db[id];
 }
 
-// ================= TANAMAN =================
-const tanaman = {
-  padi: { harga: 100, waktu: 10000, hasil: 200 },
-  jagung: { harga: 200, waktu: 15000, hasil: 400 },
-  wortel: { harga: 300, waktu: 8000, hasil: 500 },
-  tomat: { harga: 400, waktu: 20000, hasil: 800 },
-  strawberry: { harga: 800, waktu: 30000, hasil: 1500 }
-};
-
-// ================= SYSTEM =================
-function addExp(u, amount) {
-  u.exp += amount;
-  if (u.exp >= u.level * 100) {
-    u.level++;
-    u.exp = 0;
-    return "✨ LEVEL UP!";
+// ================= BERAT =================
+function totalBerat(inv) {
+  let total = 0;
+  for (let i in inv) {
+    total += (beratItem[i] || 1) * inv[i];
   }
-  return "";
+  return total;
 }
 
-function cuaca() {
-  let jam = new Date().getHours();
-  if (jam < 12) return "🌤️ Pagi";
-  if (jam < 18) return "🌇 Sore";
-  return "🌙 Malam";
+function bisaBawa(u, item, jumlah) {
+  return totalBerat(u.inv) + jumlah * (beratItem[item] || 1) <= u.kapasitas;
 }
 
-function header(t) {
-  return `🎮 ${t}\n━━━━━━━━━━━━━━━`;
-}
-
+// ================= RESPONSE =================
 function send(res, msg) {
   res.type("text/xml");
   res.send(`<Response><Message>${msg}</Message></Response>`);
@@ -87,192 +113,154 @@ app.post("/webhook", (req, res) => {
   try {
     let msg = (req.body.Body || "").toLowerCase();
     let id = req.body.From;
-
     let u = getUser(id);
     let r = "";
 
-    // MENU
-    if (msg === "main") {
-      r = `${header("RPG FARM")}
+    // ===== SETUP PLAYER =====
+    if (!u.gender || !u.nama) {
+      if (msg.startsWith("pilih")) {
+        let g = msg.split(" ")[1];
+        u.gender = g;
+        return send(res, narasi("sukses", `Gender dipilih: ${g}`));
+      }
+      if (msg.startsWith("nama")) {
+        u.nama = msg.slice(5);
+        return send(res, narasi("sukses", `Nama: ${u.nama}`));
+      }
 
-👤 Lv ${u.level} | EXP ${u.exp}
+      return send(res, narasi("info",
+`🎮 SELAMAT DATANG
+
+pilih gender:
+pilih cowok / cewek
+
+buat nama:
+nama kamu`));
+    }
+
+    // ===== MENU =====
+    if (msg === "main") {
+      r = narasi("info",
+`👤 ${u.nama}
 💰 ${u.uang}
-${cuaca()}
+🌤 ${cuaca()}
 
 📜 Menu:
-🛒 shop
-🌱 tanam [tanaman]
-🌾 panen
-🎣 mancing
-⛏️ mining
-🎰 gacha
-🕶️ maling
-🎒 tas
-📊 status`;
+shop
+tanam <tanaman>
+panen
+mancing
+jual
+inv
+misi`);
     }
 
-    // SHOP
+    // ===== SHOP =====
     else if (msg === "shop") {
-      r = `${header("TOKO")}
+      let list = Object.keys(tanaman)
+        .map(i => `${i} - ${tanaman[i].harga}`)
+        .join("\n");
 
-🌾 padi = 100
-🌽 jagung = 200
-🥕 wortel = 300
-🍅 tomat = 400
-🍓 strawberry = 800
-
-ketik: beli padi`;
+      r = narasi("info", `🏪 TOKO\n\n${list}`);
     }
 
-    // BELI
+    // ===== BELI =====
     else if (msg.startsWith("beli")) {
-      let item = msg.split(" ")[1];
+      let [_, item, jumlah] = msg.split(" ");
+      jumlah = parseInt(jumlah) || 1;
+      if (jumlah > 99) jumlah = 99;
 
       if (!tanaman[item]) return send(res, "❌ tidak ada");
 
-      let harga = tanaman[item].harga;
+      if (!bisaBawa(u, item, jumlah)) {
+        return send(res, narasi("error", "Tas penuh!"));
+      }
+
+      let harga = tanaman[item].harga * jumlah;
       if (u.uang < harga) return send(res, "💸 kurang");
 
       u.uang -= harga;
-      u.inv[item] = (u.inv[item] || 0) + 1;
+      u.inv[item] = (u.inv[item] || 0) + jumlah;
 
-      r = `🌱 beli ${item}`;
+      r = narasi("sukses", `beli ${item} x${jumlah}`);
     }
 
-    // TANAM
+    // ===== TANAM =====
     else if (msg.startsWith("tanam")) {
       let item = msg.split(" ")[1];
 
-      if (!tanaman[item]) return send(res, "❌ tidak ada");
       if (!u.inv[item]) return send(res, "❌ tidak punya");
 
       u.inv[item]--;
-      u.tanam = { jenis: item, waktu: Date.now() };
+      u.tanam = { jenis: item, hariMulai: hariSekarang() };
 
-      r = `🌱 menanam ${item}...`;
+      r = narasi("proses", `menanam ${item}...\nsiap ${tanaman[item].hari} hari`);
     }
 
-    // PANEN
+    // ===== PANEN =====
     else if (msg === "panen") {
       if (!u.tanam) return send(res, "❌ belum tanam");
 
       let data = tanaman[u.tanam.jenis];
+      let selisih = hariSekarang() - u.tanam.hariMulai;
 
-      if (Date.now() - u.tanam.waktu < data.waktu) {
-        return send(res, "⏳ belum siap");
+      if (selisih < data.hari) {
+        return send(res, narasi("proses", `belum siap ${selisih}/${data.hari}`));
       }
 
-      let bonus = 1;
-      let jam = new Date().getHours();
-      if (jam >= 6 && jam <= 9) bonus = 1.5;
-
-      let hasil = Math.floor((data.hasil + Math.random() * 100) * bonus);
-
-      if (Math.random() < 0.1) {
-        hasil += 500;
-        r += "\n💎 BONUS LANGKA!";
-      }
-
+      let hasil = data.hasil;
       u.uang += hasil;
-      let up = addExp(u, 20);
-
-      r = `${header("PANEN")}
-
-🌾 ${u.tanam.jenis}
-💰 +${hasil}
-${up}`;
-
       u.tanam = null;
+
+      r = narasi("hasil", `panen +${hasil}`);
     }
 
-    // MANCING
+    // ===== JUAL =====
+    else if (msg === "jual") {
+      let total = 0;
+
+      for (let i in u.inv) {
+        total += u.inv[i] * 100;
+      }
+
+      u.inv = {};
+      u.uang += total;
+
+      r = narasi("hasil", `jual semua +${total}`);
+    }
+
+    // ===== MANCING =====
     else if (msg === "mancing") {
       let rand = Math.random();
-
-      r = `${header("MANCING")}
-
-🎣 Menunggu...`;
-
-      if (rand < 0.5) {
-        u.uang += 200;
-        r += "\n🐟 ikan +200";
-      } else if (rand < 0.85) {
-        r += "\n💀 sampah";
-      } else {
-        u.uang += 700;
-        r += "\n🐋 LEGENDARY +700";
-      }
+      r = narasi("proses", rand < 0.5 ? "dapat ikan" : "zonk");
     }
 
-    // MINING
-    else if (msg === "mining") {
-      let rand = Math.random();
-
-      if (rand < 0.7) {
-        u.uang += 150;
-        r = "⛏ batu +150";
-      } else {
-        u.uang += 500;
-        r = "💎 diamond +500";
-      }
+    // ===== INVENTORY =====
+    else if (msg === "inv") {
+      r = narasi("info",
+JSON.stringify(u.inv, null, 2) +
+`\n⚖️ ${totalBerat(u.inv)}/${u.kapasitas} kg`);
     }
 
-    // GACHA
-    else if (msg === "gacha") {
-      if (u.uang < 200) return send(res, "💸 kurang");
-
-      u.uang -= 200;
-
-      if (Math.random() < 0.1) {
-        u.uang += 2000;
-        r = "🌟 JACKPOT +2000";
-      } else {
-        r = "💀 zonk";
-      }
-    }
-
-    // MALING
-    else if (msg === "maling") {
-      if (Math.random() < 0.5) {
-        u.uang += 300;
-        r = "🕶️ sukses +300";
-      } else {
-        u.uang -= 200;
-        r = "🚨 ketangkep -200";
-      }
-    }
-
-    // TAS
-    else if (msg === "tas") {
-      r = `${header("INVENTORY")}
-
-${JSON.stringify(u.inv, null, 2)}`;
-    }
-
-    // STATUS
-    else if (msg === "status") {
-      r = `${header("STATUS")}
-
-Lv ${u.level}
-EXP ${u.exp}
-💰 ${u.uang}`;
+    // ===== MISI =====
+    else if (msg === "misi") {
+      r = narasi("info", "panen 2x hari ini");
     }
 
     else {
-      r = "❓ ketik main";
+      r = "ketik main";
     }
 
     saveDB();
     send(res, r);
 
-  } catch (err) {
-    console.log(err);
-    send(res, "😵 error");
+  } catch (e) {
+    console.log(e);
+    send(res, "error");
   }
 });
 
-// RUN
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, "0.0.0.0", () => {
-  console.log("🚀 jalan " + PORT);
+// ================= RUN =================
+app.listen(process.env.PORT || 3000, "0.0.0.0", () => {
+  console.log("🚀 jalan");
 });
