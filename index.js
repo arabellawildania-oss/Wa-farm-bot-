@@ -10,6 +10,9 @@ app.use(express.json());
 app.get("/", (req, res) => {
   res.send("Server hidup 🚀");
 });
+app.get("/health", (req, res) => {
+  res.send("OK");
+});
 
 // DATABASE
 let db = {};
