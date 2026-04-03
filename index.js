@@ -117,26 +117,43 @@ app.post("/webhook", (req, res) => {
     let r = "";
 
     // ===== SETUP PLAYER =====
-    if (!u.gender || !u.nama) {
-      if (msg.startsWith("pilih")) {
-        let g = msg.split(" ")[1];
-        u.gender = g;
-        return send(res, narasi("sukses", `Gender dipilih: ${g}`));
-      }
-      if (msg.startsWith("nama")) {
-        u.nama = msg.slice(5);
-        return send(res, narasi("sukses", `Nama: ${u.nama}`));
-      }
+if (!u.gender) {
+  if (msg === "cowok" || msg === "cewek") {
+    u.gender = msg;
+    saveDB();
+    return send(res, narasi("sukses", `Gender dipilih: ${msg}`));
+  }
 
-      return send(res, narasi("info",
+  return send(res, narasi("info",
 `🎮 SELAMAT DATANG
 
-pilih gender:
-pilih cowok / cewek
+Pilih gender:
+👉 ketik: cowok / cewek`));
+}
 
-buat nama:
-nama kamu`));
+if (!u.nama) {
+  if (msg.startsWith("nama")) {
+    let nama = msg.replace("nama", "").trim();
+
+    if (!nama) {
+      return send(res, "❌ masukkan nama!");
     }
+
+    u.nama = nama;
+    saveDB();
+
+    return send(res, narasi("sukses",
+`👤 Nama disimpan: ${nama}
+
+🔥 Siap bermain! ketik: main`));
+  }
+
+  return send(res, narasi("info",
+`✏️ Buat nama kamu
+
+👉 ketik:
+nama Jibriel`));
+}
 
     // ===== MENU =====
     if (msg === "main") {
