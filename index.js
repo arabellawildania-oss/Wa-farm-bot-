@@ -90,7 +90,7 @@ gacha`;
   } else {
     r = "❓ ketik main";
   }
-
+  
   send(res, r);
 });
 
