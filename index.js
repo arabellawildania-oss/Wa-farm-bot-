@@ -53,11 +53,6 @@ function hari() {
   return Math.floor(Date.now() / 86400000);
 }
 
-function cuaca() {
-  const list = ["☀️ Cerah", "🌧 Hujan", "🌥 Mendung", "🌪 Angin"];
-  return list[new Date().getHours() % list.length];
-}
-
 // ===== DATA =====
 const tanaman = {
   jagung: { harga: 100, hari: 2, hasil: 300 },
@@ -91,7 +86,7 @@ function send(res, msg) {
 // ===== WEBHOOK =====
 app.post("/webhook", (req, res) => {
   try {
-    let raw = (req.body.Body || "").trim();
+    let raw = (req.body.Body || "").toString().trim();
     let msg = raw.toLowerCase();
     let id = req.body.From;
 
@@ -100,54 +95,43 @@ app.post("/webhook", (req, res) => {
 
     // ===== GENDER =====
     if (!u.gender) {
-      if (msg.includes("cowok") || msg.includes("cewek")) {
-        u.gender = msg.includes("cowok") ? "cowok" : "cewek";
-
+      if (msg === "cowok" || msg === "cewek") {
+        u.gender = msg;
         saveDB();
         return send(res, narasi("sukses",
-`🧬 Gender dipilih: ${u.gender}
+`🧬 Gender dipilih: ${msg}
 
-✨ Dunia mulai terasa nyata...
-
-👉 Sekarang, siapa namamu?`));
+👉 Sekarang ketik nama kamu`));
       }
 
       return send(res, narasi("info",
-`🌾 Kamu terbangun di desa asing...
+`🌾 Kamu terbangun di desa...
 
 👤 Pilih gender:
-👉 cowok / cewek`));
+cowok / cewek`));
     }
 
     // ===== NAMA =====
     if (!u.nama) {
       if (raw.length >= 3) {
         u.nama = raw;
-
         saveDB();
         return send(res, narasi("sukses",
-`👤 Halo ${u.nama}...
+`👤 Halo ${u.nama}
 
-🌿 Angin desa menyambutmu...
-🌤 ${cuaca()}
+🌾 Petualangan dimulai!
 
-💭 "Ini awal kehidupan baruku..."
-
-👉 ketik *main* untuk mulai`));
+👉 ketik main`));
       }
 
-      return send(res, narasi("info",
-`✏️ Masukkan namamu
-
-💬 ketik saja nama`));
+      return send(res, "ketik nama kamu");
     }
 
     // ===== MENU =====
-    if (msg.includes("main") || msg.includes("menu")) {
+    if (msg === "main" || msg === "menu") {
       r = narasi("info",
 `👤 ${u.nama}
 💰 ${u.uang}
-🌤 ${cuaca()}
 
 📜 Menu:
 shop
@@ -159,26 +143,27 @@ inv`);
     }
 
     // ===== SHOP =====
-    else if (msg.includes("shop")) {
+    else if (msg === "shop") {
       let list = Object.keys(tanaman)
         .map(i => `🌱 ${i} - ${tanaman[i].harga}`)
         .join("\n");
 
       r = narasi("info",
-`🏪 Kamu masuk ke toko desa...
+`🏪 SHOP:
 
 ${list}
 
-💬 beli <item> jumlah`);
+ketik:
+beli <item> jumlah`);
     }
 
     // ===== BELI =====
-    else if (msg.startsWith("beli")) {
+    else if (msg.startsWith("beli ")) {
       let [_, item, jumlah] = msg.split(" ");
       jumlah = parseInt(jumlah) || 1;
       if (jumlah > 99) jumlah = 99;
 
-      if (!tanaman[item]) return send(res, "❌ tidak ada");
+      if (!tanaman[item]) return send(res, "❌ item tidak ada");
 
       let harga = tanaman[item].harga * jumlah;
       if (u.uang < harga) return send(res, "💸 uang kurang");
@@ -187,130 +172,99 @@ ${list}
       u.inv[item] = (u.inv[item] || 0) + jumlah;
 
       r = narasi("sukses",
-`🛒 Kamu membeli ${item} x${jumlah}
+`🛒 beli ${item} x${jumlah}
+💰 -${harga}`);
+    }
 
-💰 -${harga}
-😊 Pedagang tersenyum`);
+    // ===== TANAM HELP =====
+    else if (msg === "tanam") {
+      return send(res,
+`🌱 mau tanam apa?
+
+contoh:
+tanam jagung`);
     }
 
     // ===== TANAM =====
-    else if (msg.startsWith("tanam")) {
+    else if (msg.startsWith("tanam ")) {
       let item = msg.split(" ")[1];
 
       if (!tanaman[item]) {
-        return send(res, narasi("error",
-`❌ Tanaman tidak tersedia
-
-💡 cek di shop`));
+        return send(res, "❌ tanaman tidak ada");
       }
 
       if (!u.inv[item]) {
-        return send(res, narasi("error",
-`😅 Kamu belum punya ${item}`));
+        return send(res, `❌ tidak punya ${item}`);
       }
 
       u.inv[item]--;
       u.tanam = { jenis: item, mulai: hari() };
 
-      let kata = random([
-        "Tanah terasa subur hari ini...",
-        "Angin sejuk menemani...",
-        "Burung berkicau di kejauhan..."
-      ]);
-
-      let data = tanaman[item];
-
       r = narasi("proses",
-`🌱 Kamu menanam ${item}...
+`🌱 menanam ${item}
 
-${kata}
-💧 Disiram perlahan
-🌤 ${cuaca()}
-
-⏳ Siap dalam ${data.hari} hari`);
+⏳ siap dalam ${tanaman[item].hari} hari`);
     }
 
     // ===== PANEN =====
-    else if (msg.includes("panen")) {
-      if (!u.tanam) {
-        return send(res, narasi("error",
-`❌ Belum ada tanaman`));
-      }
+    else if (msg === "panen") {
+      if (!u.tanam) return send(res, "❌ belum tanam");
 
       let data = tanaman[u.tanam.jenis];
       let selisih = hari() - u.tanam.mulai;
 
       if (selisih < data.hari) {
-        return send(res, narasi("proses",
-`⏳ Belum siap
-
-📅 ${selisih}/${data.hari} hari`));
+        return send(res, `⏳ ${selisih}/${data.hari} hari`);
       }
 
       u.uang += data.hasil;
       u.tanam = null;
 
-      let kata = random([
-        "Panen melimpah!",
-        "Hasil luar biasa!",
-        "Kerja keras terbayar!"
-      ]);
-
       r = narasi("hasil",
-`🌾 Panen berhasil!
-
-${kata}
-
+`🌾 panen berhasil
 💰 +${data.hasil}`);
     }
 
     // ===== MANCING =====
-    else if (msg.includes("mancing")) {
-      let rand = Math.random();
-
-      let hasil =
-        rand < 0.5 ? "🐟 Ikan kecil!"
-        : rand < 0.8 ? "🐠 Ikan besar!"
-        : "💀 Sampah...";
-
+    else if (msg === "mancing") {
+      let hasil = ["🐟 ikan kecil", "🐠 ikan besar", "💀 sampah"];
       r = narasi("proses",
-`🎣 Kamu melempar kail...
+`🎣 memancing...
 
-🌊 Air bergelombang...
-⏳ menunggu...
-
-${hasil}`);
+${random(hasil)}`);
     }
 
     // ===== JUAL =====
-    else if (msg.includes("jual")) {
+    else if (msg === "jual") {
       let total = 0;
-      for (let i in u.inv) {
-        total += u.inv[i] * 100;
-      }
+      for (let i in u.inv) total += u.inv[i] * 100;
 
       u.inv = {};
       u.uang += total;
 
       r = narasi("hasil",
-`🏪 Kamu menjual hasil panen...
-
-💰 +${total}`);
+`💰 semua hasil terjual
++${total}`);
     }
 
     // ===== INVENTORY =====
-    else if (msg.includes("inv")) {
+    else if (msg === "inv") {
       let isi = Object.keys(u.inv).length
         ? Object.entries(u.inv)
-            .map(([k,v]) => `🌱 ${k}: ${v}`)
+            .map(([k,v]) => `${k}: ${v}`)
             .join("\n")
-        : "Kosong";
+        : "kosong";
 
       r = narasi("info", isi);
     }
 
+    // ===== FALLBACK =====
     else {
-      r = "ketik main";
+      r = narasi("info",
+`🤔 Tidak paham: "${raw}"
+
+coba:
+main / shop / tanam`);
     }
 
     saveDB();
