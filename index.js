@@ -13,12 +13,12 @@ app.get("/", (req, res) => {
 
 // DATABASE
 let db = {};
+
 try {
   if (fs.existsSync("db.json")) {
     db = JSON.parse(fs.readFileSync("db.json", "utf-8"));
   } else {
     fs.writeFileSync("db.json", "{}");
-    db = {};
   }
 } catch (e) {
   console.log("DB error:", e);
@@ -42,7 +42,7 @@ function user(id) {
   return db[id];
 }
 
-// WEBHOOK (SATU SAJA)
+// WEBHOOK (SATU SAJA!)
 app.post("/webhook", (req, res) => {
   console.log("MASUK 🔥", req.body);
 
@@ -93,8 +93,11 @@ app.post("/webhook", (req, res) => {
 
 // RESPONSE
 function send(res, msg) {
-  res.set("Content-Type", "text/xml");
-  res.send(`<Response><Message>${msg}</Message></Response>`);
+  res.type("text/xml");
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+<Message>${msg}</Message>
+</Response>`);
 }
 
 // RUN
