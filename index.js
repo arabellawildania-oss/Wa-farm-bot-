@@ -3,6 +3,12 @@ const fs = require("fs");
 
 const app = express();
 app.use(express.urlencoded({ extended: true }));
+app.get("/", (req, res) => {
+  res.send("Server hidup 🚀");
+});
+app.get("/webhook", (req, res) => {
+  res.send("Webhook ready ✅");
+});
 app.use(express.json());
 let db = {};
 try { db = JSON.parse(fs.readFileSync("db.json")); } catch {}
@@ -29,7 +35,7 @@ app.post("/webhook", (req, res) => {
   let id = req.body.From;
   let u = user(id);
   let r = "";
-
+  
   if (msg === "main") {
     r = `🌍 FARM GAME ULTIMATE\n💰 ${u.uang}\n\nPerintah:\n🌱 tanam\n🐄 ternak\n🎒 tas\n🎁 daily\n🎰 gacha\n🏪 jual`;
   }
@@ -84,6 +90,7 @@ app.post("/webhook", (req, res) => {
 });
 
 function send(res, msg) {
+  res.set("Content-Type", "text/xml");
   res.send(`<Response><Message>${msg}</Message></Response>`);
 }
 
