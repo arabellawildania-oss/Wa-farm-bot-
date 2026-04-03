@@ -1,36 +1,28 @@
 const express = require("express");
-const fs = require("fs");
 
 const app = express();
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
+// DEBUG (biar keliatan request masuk)
+app.use((req, res, next) => {
+  console.log("HIT:", req.method, req.url);
+  next();
+});
+
 // ROOT
 app.get("/", (req, res) => {
   res.send("Server hidup 🚀");
 });
+
+// HEALTH CHECK
 app.get("/health", (req, res) => {
   res.send("OK");
 });
 
-// DATABASE
+// DATABASE (sementara di memory)
 let db = {};
-
-try {
-  if (fs.existsSync("db.json")) {
-    db = JSON.parse(fs.readFileSync("db.json", "utf-8"));
-  } else {
-    fs.writeFileSync("db.json", "{}");
-  }
-} catch (e) {
-  console.log("DB error:", e);
-  db = {};
-}
-
-function save() {
-  fs.writeFileSync("db.json", JSON.stringify(db, null, 2));
-}
 
 function user(id) {
   if (!db[id]) {
@@ -50,13 +42,22 @@ app.post("/webhook", (req, res) => {
   console.log("MASUK 🔥", req.body);
 
   let msg = (req.body.Body || "").toLowerCase();
-  let id = req.body.From;
+  let id = req.body.From || "user";
 
   let u = user(id);
   let r = "";
 
   if (msg === "main") {
-    r = `🌾 FARM GAME\n💰 ${u.uang}\n\nPerintah:\ntanam\nternak\ntas\njual\ndaily\ngacha`;
+    r = `🌾 FARM GAME
+💰 ${u.uang}
+
+Perintah:
+tanam
+ternak
+tas
+jual
+daily
+gacha`;
   } else if (msg === "tanam") {
     let hasil = Math.floor(Math.random() * 10) + 5;
     u.inv.padi = (u.inv.padi || 0) + hasil;
@@ -90,11 +91,10 @@ app.post("/webhook", (req, res) => {
     r = "❓ ketik main";
   }
 
-  save();
   send(res, r);
 });
 
-// RESPONSE
+// RESPONSE (FORMAT TWILIO)
 function send(res, msg) {
   res.type("text/xml");
   res.send(`<?xml version="1.0" encoding="UTF-8"?>
@@ -103,7 +103,7 @@ function send(res, msg) {
 </Response>`);
 }
 
-// RUN
+// RUN (WAJIB UNTUK RAILWAY)
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, "0.0.0.0", () => {
