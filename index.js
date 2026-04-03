@@ -11,27 +11,17 @@ app.get("/", (req, res) => {
   res.send("Server hidup 🚀");
 });
 
-// WEBHOOK TEST
-// TEST
-app.get("/webhook", (req, res) => {
-  res.send("Webhook ready ✅");
-});
-
-// WEBHOOK UTAMA (INI SAJA)
-app.post("/webhook", (req, res) => {
-  let msg = (req.body.Body || "").toLowerCase();
-
-  let reply = "Halo";
-
-  res.set("Content-Type", "text/xml");
-  res.send(`<Response><Message>${reply}</Message></Response>`);
-});
-
 // DATABASE
 let db = {};
 try {
-  db = JSON.parse(fs.readFileSync("db.json"));
-} catch {
+  if (fs.existsSync("db.json")) {
+    db = JSON.parse(fs.readFileSync("db.json", "utf-8"));
+  } else {
+    fs.writeFileSync("db.json", "{}");
+    db = {};
+  }
+} catch (e) {
+  console.log("DB error:", e);
   db = {};
 }
 
@@ -52,8 +42,10 @@ function user(id) {
   return db[id];
 }
 
-// WEBHOOK
+// WEBHOOK (SATU SAJA)
 app.post("/webhook", (req, res) => {
+  console.log("MASUK 🔥", req.body);
+
   let msg = (req.body.Body || "").toLowerCase();
   let id = req.body.From;
 
